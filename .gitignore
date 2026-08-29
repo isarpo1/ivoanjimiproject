@@ -1,0 +1,25 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+
+# NestJS
+dist/
+
+# Prisma
+backend/.env
+
+# Flutter
+.dart_tool/
+.build/
+build/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
