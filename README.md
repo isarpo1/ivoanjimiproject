@@ -49,3 +49,14 @@ Future phases may include:
 - Digital wallet
 - Rewards
 - Financial services
+
+## ivorysarpong@MacBookAir ivoanjim %
+        ↑
+        Mac/Linux shell
+        Commands: git, docker, npm, cd
+
+
+ ## ivoanjimi_rentals=#
+        ↑
+        PostgreSQL shell
+        Commands: SELECT, CREATE TABLE, \dt
