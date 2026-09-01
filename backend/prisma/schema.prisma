@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum PropertyStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id        String  @id @default(uuid()) @db.Uuid
+  firstName String
+  lastName  String
+  email     String  @unique
+  phone     String? @unique
+
+  passwordHash String
+
+  role       UserRole @default(USER)
+  isHost     Boolean  @default(false)
+  isVerified Boolean  @default(false)
+
+  profilePhotoUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hostedProperties Property[] @relation("PropertyHost")
+  bookings         Booking[]  @relation("GuestBookings")
+  reviews          Review[]
+  sentMessages     Message[]
+
+  guestConversations Conversation[] @relation("GuestConversations")
+  hostConversations  Conversation[] @relation("HostConversations")
+
+  @@map("users")
+}
+
+model Property {
+  id     String @id @default(uuid()) @db.Uuid
+  hostId String @db.Uuid
+
+  host User @relation("PropertyHost", fields: [hostId], references: [id])
+
+  title       String
+  description String
+
+  address String
+  city    String
+  state   String
+  country String @default("Nigeria")
+
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  pricePerNight Decimal @db.Decimal(12, 2)
+
+  bedrooms  Int
+  bathrooms Int
+  maxGuests Int
+
+  status PropertyStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  images        PropertyImage[]
+  amenities     PropertyAmenity[]
+  bookings      Booking[]
+  reviews       Review[]
+  conversations Conversation[]
+
+  @@index([hostId])
+  @@index([city])
+  @@index([state])
+  @@index([status])
+  @@map("properties")
+}
+
+model PropertyImage {
+  id         String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  imageUrl     String
+  displayOrder Int     @default(0)
+  isCover      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([propertyId])
+  @@map("property_images")
+}
+
+model Amenity {
+  id   String  @id @default(uuid()) @db.Uuid
+  name String  @unique
+  icon String?
+
+  properties PropertyAmenity[]
+
+  @@map("amenities")
+}
+
+model PropertyAmenity {
+  propertyId String @db.Uuid
+  amenityId  String @db.Uuid
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenity  Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, amenityId])
+  @@map("property_amenities")
+}
+
+model Booking {
+  id         String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  guestId    String @db.Uuid
+
+  property Property @relation(fields: [propertyId], references: [id])
+  guest    User     @relation("GuestBookings", fields: [guestId], references: [id])
+
+  checkIn  DateTime @db.Date
+  checkOut DateTime @db.Date
+
+  guestCount Int
+
+  nightlyRate Decimal @db.Decimal(12, 2)
+  subtotal    Decimal @db.Decimal(12, 2)
+  serviceFee  Decimal @db.Decimal(12, 2)
+  total       Decimal @db.Decimal(12, 2)
+
+  currency String @default("NGN")
+
+  status BookingStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments     Payment[]
+  review       Review?
+  conversation Conversation?
+
+  @@index([propertyId])
+  @@index([guestId])
+  @@index([checkIn, checkOut])
+  @@index([status])
+  @@map("bookings")
+}
+
+model Payment {
+  id        String @id @default(uuid()) @db.Uuid
+  bookingId String @db.Uuid
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  provider          String
+  providerReference String? @unique
+
+  amount   Decimal @db.Decimal(12, 2)
+  currency String  @default("NGN")
+
+  status PaymentStatus @default(PENDING)
+
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId])
+  @@map("payments")
+}
+
+model Review {
+  id         String @id @default(uuid()) @db.Uuid
+  bookingId  String @unique @db.Uuid
+  propertyId String @db.Uuid
+  userId     String @db.Uuid
+
+  booking  Booking  @relation(fields: [bookingId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  rating  Int
+  comment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId])
+  @@index([userId])
+  @@map("reviews")
+}
+
+model Conversation {
+  id         String  @id @default(uuid()) @db.Uuid
+  propertyId String  @db.Uuid
+  bookingId  String? @unique @db.Uuid
+  guestId    String  @db.Uuid
+  hostId     String  @db.Uuid
+
+  property Property @relation(fields: [propertyId], references: [id])
+  booking  Booking? @relation(fields: [bookingId], references: [id])
+
+  guest User @relation("GuestConversations", fields: [guestId], references: [id])
+  host  User @relation("HostConversations", fields: [hostId], references: [id])
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId])
+  @@index([guestId])
+  @@index([hostId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String @id @default(uuid()) @db.Uuid
+  conversationId String @db.Uuid
+  senderId       String @db.Uuid
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id])
+
+  message String
+
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("messages")
+}
