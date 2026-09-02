@@ -7,6 +7,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { unlink } from 'fs/promises';
+import { join } from 'path';
 
 @Injectable()
 export class PropertiesService {
@@ -96,6 +98,180 @@ export class PropertiesService {
     },
   });
 }
+async setCoverImage(
+  propertyId: string,
+  hostId: string,
+  imageId: string,
+) {
+  await this.findOneForHost(propertyId, hostId);
+
+  const image = await this.prisma.propertyImage.findFirst({
+    where: {
+      id: imageId,
+      propertyId,
+    },
+  });
+
+  if (!image) {
+    throw new NotFoundException('Image not found');
+  }
+
+  await this.prisma.$transaction([
+    this.prisma.propertyImage.updateMany({
+      where: {
+        propertyId,
+      },
+      data: {
+        isCover: false,
+      },
+    }),
+
+    this.prisma.propertyImage.update({
+      where: {
+        id: imageId,
+      },
+      data: {
+        isCover: true,
+      },
+    }),
+  ]);
+
+  return this.prisma.propertyImage.findMany({
+    where: {
+      propertyId,
+    },
+    orderBy: {
+      displayOrder: 'asc',
+    },
+  });
+}
+
+async reorderImages(
+  propertyId: string,
+  hostId: string,
+  imageIds: string[],
+) {
+  await this.findOneForHost(propertyId, hostId);
+
+  const currentImages =
+    await this.prisma.propertyImage.findMany({
+      where: {
+        propertyId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+  const currentIds = currentImages.map(
+    (image) => image.id,
+  );
+
+  const allIdsValid =
+    imageIds.length === currentIds.length &&
+    imageIds.every((id) => currentIds.includes(id));
+
+  if (!allIdsValid) {
+    throw new BadRequestException(
+      'Image list must contain all property images exactly once',
+    );
+  }
+
+  await this.prisma.$transaction(
+    imageIds.map((imageId, index) =>
+      this.prisma.propertyImage.update({
+        where: {
+          id: imageId,
+        },
+        data: {
+          displayOrder: index,
+        },
+      }),
+    ),
+  );
+
+  return this.prisma.propertyImage.findMany({
+    where: {
+      propertyId,
+    },
+    orderBy: {
+      displayOrder: 'asc',
+    },
+  });
+}
+
+async deleteImage(
+  propertyId: string,
+  hostId: string,
+  imageId: string,
+) {
+  await this.findOneForHost(propertyId, hostId);
+
+  const image = await this.prisma.propertyImage.findFirst({
+    where: {
+      id: imageId,
+      propertyId,
+    },
+  });
+
+  if (!image) {
+    throw new NotFoundException('Image not found');
+  }
+
+  await this.prisma.propertyImage.delete({
+    where: {
+      id: imageId,
+    },
+  });
+
+  const remainingImages =
+    await this.prisma.propertyImage.findMany({
+      where: {
+        propertyId,
+      },
+      orderBy: {
+        displayOrder: 'asc',
+      },
+    });
+
+  if (remainingImages.length > 0) {
+    await this.prisma.$transaction(
+      remainingImages.map((remainingImage, index) =>
+        this.prisma.propertyImage.update({
+          where: {
+            id: remainingImage.id,
+          },
+          data: {
+            displayOrder: index,
+
+            isCover:
+              image.isCover && index === 0
+                ? true
+                : remainingImage.isCover,
+          },
+        }),
+      ),
+    );
+  }
+
+  const relativePath =
+    image.imageUrl.replace(/^\/+/, '');
+
+  const filePath = join(
+    process.cwd(),
+    relativePath,
+  );
+
+  try {
+    await unlink(filePath);
+  } catch {
+    // File may already be missing locally.
+  }
+
+  return {
+    message: 'Image deleted successfully',
+  };
+}
 
 async setAmenities(
   propertyId: string,
@@ -159,6 +335,7 @@ async setAmenities(
   });
 }
 
+
   async deactivate(id: string, hostId: string) {
     await this.findOneForHost(id, hostId);
 
@@ -172,4 +349,52 @@ async setAmenities(
       },
     });
   }
+  async addImages(
+  propertyId: string,
+  hostId: string,
+  files: Express.Multer.File[],
+) {
+  await this.findOneForHost(propertyId, hostId);
+
+  if (!files || files.length === 0) {
+    throw new BadRequestException(
+      'At least one property image is required',
+    );
+  }
+const existingImageCount =
+  await this.prisma.propertyImage.count({
+    where: {
+      propertyId,
+    },
+  });
+
+if (existingImageCount + files.length > 10) {
+  throw new BadRequestException(
+    'A property can have a maximum of 10 images',
+  );
+}
+
+  const images = await this.prisma.$transaction(
+    files.map((file, index) =>
+      this.prisma.propertyImage.create({
+        data: {
+          propertyId,
+
+          imageUrl:
+            `/uploads/properties/${file.filename}`,
+
+          displayOrder:
+            existingImageCount + index,
+
+          isCover:
+            existingImageCount === 0 &&
+            index === 0,
+        },
+      }),
+    ),
+  );
+  
+
+  return images;
+}
 }
