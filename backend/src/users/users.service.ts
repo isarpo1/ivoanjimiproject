@@ -20,6 +20,16 @@ export class UsersService {
       },
     });
   }
+  async becomeHost(id: string) {
+  return this.prisma.user.update({
+    where: {
+      id,
+    },
+    data: {
+      isHost: true,
+    },
+  });
+}
 
   async create(data: {
     firstName: string;
