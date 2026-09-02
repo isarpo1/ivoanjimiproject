@@ -1,10 +1,13 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  IsArray,
+  IsDateString,
   IsIn,
   IsInt,
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   Min,
 } from 'class-validator';
@@ -58,4 +61,22 @@ export class SearchPropertiesDto {
   @Min(1)
   @Max(50)
   limit: number = 20;
+
+  @IsOptional()
+@IsDateString()
+checkIn?: string;
+
+@IsOptional()
+@IsDateString()
+checkOut?: string;
+
+@IsOptional()
+@Transform(({ value }) =>
+  typeof value === 'string'
+    ? value.split(',').filter(Boolean)
+    : value,
+)
+@IsArray()
+@IsUUID('4', { each: true })
+amenityIds?: string[];
 }

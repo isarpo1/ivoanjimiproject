@@ -277,6 +277,26 @@ async findPublic(dto: SearchPropertiesDto) {
   const page = dto.page ?? 1;
   const limit = dto.limit ?? 20;
 
+  let checkInDate: Date | undefined;
+  let checkOutDate: Date | undefined;
+
+if (dto.checkIn || dto.checkOut) {
+  if (!dto.checkIn || !dto.checkOut) {
+    throw new BadRequestException(
+      'Both check-in and check-out dates are required',
+    );
+  }
+
+  checkInDate = new Date(dto.checkIn);
+  checkOutDate = new Date(dto.checkOut);
+
+  if (checkOutDate <= checkInDate) {
+    throw new BadRequestException(
+      'Check-out must be after check-in',
+    );
+  }
+}
+
   const where: any = {
     status: 'ACTIVE',
   };
@@ -320,7 +340,34 @@ async findPublic(dto: SearchPropertiesDto) {
     where.maxGuests = {
       gte: dto.guests,
     };
-  }
+  }if (
+  dto.amenityIds &&
+  dto.amenityIds.length > 0
+) {
+  where.AND = dto.amenityIds.map(
+    (amenityId) => ({
+      amenities: {
+        some: {
+          amenityId,
+        },
+      },
+    }),
+  );
+}
+if (
+  dto.amenityIds &&
+  dto.amenityIds.length > 0
+) {
+  where.AND = dto.amenityIds.map(
+    (amenityId) => ({
+      amenities: {
+        some: {
+          amenityId,
+        },
+      },
+    }),
+  );
+}
 
   let orderBy: any = {
     createdAt: 'desc',

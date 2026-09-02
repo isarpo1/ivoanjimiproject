@@ -4,6 +4,7 @@ import { PropertiesController } from './properties.controller';
 import { PropertiesService } from './properties.service';
 import { HostGuard } from './host.guard';
 import { PublicPropertiesController } from './public-properties.controller';
+import { PublicAmenitiesController } from './public-amenities.controller';
 import { AmenitiesController } from './amenities.controller';
 import { UsersModule } from '../users/users.module';
 
@@ -18,6 +19,7 @@ import { UsersModule } from '../users/users.module';
   PropertiesController,
   AmenitiesController,
   PublicPropertiesController,
+  PublicAmenitiesController
 ],
 
   providers: [
