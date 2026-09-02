@@ -6,10 +6,13 @@ import { AppService } from './app.service';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './health/health.controller';
+import { BookingsModule } from './bookings/bookings.module';
 
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { PropertiesModule } from './properties/properties.module';
+
+
 
 @Module({
   imports: [
@@ -22,6 +25,7 @@ import { PropertiesModule } from './properties/properties.module';
     AuthModule,
     UsersModule,
     PropertiesModule,
+    BookingsModule,
   ],
 
   controllers: [
