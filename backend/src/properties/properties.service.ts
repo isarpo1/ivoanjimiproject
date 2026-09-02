@@ -6,6 +6,7 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
+import { SearchPropertiesDto } from './dto/search-properties.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
@@ -272,7 +273,165 @@ async deleteImage(
     message: 'Image deleted successfully',
   };
 }
+async findPublic(dto: SearchPropertiesDto) {
+  const page = dto.page ?? 1;
+  const limit = dto.limit ?? 20;
 
+  const where: any = {
+    status: 'ACTIVE',
+  };
+
+  if (dto.city) {
+    where.city = {
+      contains: dto.city,
+      mode: 'insensitive',
+    };
+  }
+
+  if (dto.state) {
+    where.state = {
+      contains: dto.state,
+      mode: 'insensitive',
+    };
+  }
+
+  if (
+    dto.minPrice !== undefined ||
+    dto.maxPrice !== undefined
+  ) {
+    where.pricePerNight = {};
+
+    if (dto.minPrice !== undefined) {
+      where.pricePerNight.gte = dto.minPrice;
+    }
+
+    if (dto.maxPrice !== undefined) {
+      where.pricePerNight.lte = dto.maxPrice;
+    }
+  }
+
+  if (dto.bedrooms !== undefined) {
+    where.bedrooms = {
+      gte: dto.bedrooms,
+    };
+  }
+
+  if (dto.guests !== undefined) {
+    where.maxGuests = {
+      gte: dto.guests,
+    };
+  }
+
+  let orderBy: any = {
+    createdAt: 'desc',
+  };
+
+  if (dto.sort === 'price_asc') {
+    orderBy = {
+      pricePerNight: 'asc',
+    };
+  }
+
+  if (dto.sort === 'price_desc') {
+    orderBy = {
+      pricePerNight: 'desc',
+    };
+  }
+
+  const [total, properties] =
+    await this.prisma.$transaction([
+      this.prisma.property.count({
+        where,
+      }),
+
+      this.prisma.property.findMany({
+        where,
+
+        orderBy,
+
+        skip: (page - 1) * limit,
+
+        take: limit,
+
+        include: {
+          images: {
+            orderBy: {
+              displayOrder: 'asc',
+            },
+          },
+
+          amenities: {
+            include: {
+              amenity: true,
+            },
+          },
+
+          host: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              isVerified: true,
+              profilePhotoUrl: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+  return {
+    data: properties,
+
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+
+async findPublicOne(id: string) {
+  const property =
+    await this.prisma.property.findFirst({
+      where: {
+        id,
+        status: 'ACTIVE',
+      },
+
+      include: {
+        images: {
+          orderBy: {
+            displayOrder: 'asc',
+          },
+        },
+
+        amenities: {
+          include: {
+            amenity: true,
+          },
+        },
+
+        host: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            isVerified: true,
+            profilePhotoUrl: true,
+          },
+        },
+      },
+    });
+
+  if (!property) {
+    throw new NotFoundException(
+      'Property not found',
+    );
+  }
+
+  return property;
+}
 async setAmenities(
   propertyId: string,
   hostId: string,
@@ -373,6 +532,7 @@ if (existingImageCount + files.length > 10) {
     'A property can have a maximum of 10 images',
   );
 }
+
 
   const images = await this.prisma.$transaction(
     files.map((file, index) =>
