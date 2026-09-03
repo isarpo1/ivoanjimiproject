@@ -280,22 +280,22 @@ async findPublic(dto: SearchPropertiesDto) {
   let checkInDate: Date | undefined;
   let checkOutDate: Date | undefined;
 
-if (dto.checkIn || dto.checkOut) {
-  if (!dto.checkIn || !dto.checkOut) {
-    throw new BadRequestException(
-      'Both check-in and check-out dates are required',
-    );
-  }
+  if (dto.checkIn || dto.checkOut) {
+    if (!dto.checkIn || !dto.checkOut) {
+      throw new BadRequestException(
+        'Both check-in and check-out dates are required',
+      );
+    }
 
-  checkInDate = new Date(dto.checkIn);
-  checkOutDate = new Date(dto.checkOut);
+    checkInDate = new Date(dto.checkIn);
+    checkOutDate = new Date(dto.checkOut);
 
-  if (checkOutDate <= checkInDate) {
-    throw new BadRequestException(
-      'Check-out must be after check-in',
-    );
+    if (checkOutDate <= checkInDate) {
+      throw new BadRequestException(
+        'Check-out must be after check-in',
+      );
+    }
   }
-}
 
   const where: any = {
     status: 'ACTIVE',
@@ -340,34 +340,44 @@ if (dto.checkIn || dto.checkOut) {
     where.maxGuests = {
       gte: dto.guests,
     };
-  }if (
-  dto.amenityIds &&
-  dto.amenityIds.length > 0
-) {
-  where.AND = dto.amenityIds.map(
-    (amenityId) => ({
-      amenities: {
-        some: {
-          amenityId,
+  }
+
+  if (
+    dto.amenityIds &&
+    dto.amenityIds.length > 0
+  ) {
+    where.AND = dto.amenityIds.map(
+      (amenityId) => ({
+        amenities: {
+          some: {
+            amenityId,
+          },
+        },
+      }),
+    );
+  }
+
+  if (checkInDate && checkOutDate) {
+    where.bookings = {
+      none: {
+        status: {
+          in: [
+            'PENDING',
+            'AWAITING_HOST',
+            'CONFIRMED',
+          ],
+        },
+
+        checkIn: {
+          lt: checkOutDate,
+        },
+
+        checkOut: {
+          gt: checkInDate,
         },
       },
-    }),
-  );
-}
-if (
-  dto.amenityIds &&
-  dto.amenityIds.length > 0
-) {
-  where.AND = dto.amenityIds.map(
-    (amenityId) => ({
-      amenities: {
-        some: {
-          amenityId,
-        },
-      },
-    }),
-  );
-}
+    };
+  }
 
   let orderBy: any = {
     createdAt: 'desc',
@@ -422,22 +432,55 @@ if (
               profilePhotoUrl: true,
             },
           },
+
+          reviews: {
+            select: {
+              rating: true,
+            },
+          },
         },
       }),
     ]);
 
+  const data = properties.map(
+    (property) => {
+      const {
+        reviews,
+        ...propertyData
+      } = property;
+
+      const reviewCount = reviews.length;
+
+      const averageRating =
+        reviewCount === 0
+          ? 0
+          : reviews.reduce(
+              (total, review) =>
+                total + review.rating,
+              0,
+            ) / reviewCount;
+
+      return {
+        ...propertyData,
+        averageRating,
+        reviewCount,
+      };
+    },
+  );
+
   return {
-    data: properties,
+    data,
 
     pagination: {
       page,
       limit,
       total,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(
+        total / limit,
+      ),
     },
   };
 }
-
 async findPublicOne(id: string) {
   const property =
     await this.prisma.property.findFirst({
@@ -468,6 +511,12 @@ async findPublicOne(id: string) {
             profilePhotoUrl: true,
           },
         },
+
+        reviews: {
+          select: {
+            rating: true,
+          },
+        },
       },
     });
 
@@ -477,50 +526,85 @@ async findPublicOne(id: string) {
     );
   }
 
-  return property;
+  const {
+    reviews,
+    ...propertyData
+  } = property;
+
+  const reviewCount = reviews.length;
+
+  const averageRating =
+    reviewCount === 0
+      ? 0
+      : reviews.reduce(
+          (total, review) =>
+            total + review.rating,
+          0,
+        ) / reviewCount;
+
+  return {
+    ...propertyData,
+    averageRating,
+    reviewCount,
+  };
 }
 async setAmenities(
   propertyId: string,
   hostId: string,
   amenityIds: string[],
 ) {
-  await this.findOneForHost(propertyId, hostId);
+  await this.findOneForHost(
+    propertyId,
+    hostId,
+  );
 
-  const amenities = await this.prisma.amenity.findMany({
-    where: {
-      id: {
-        in: amenityIds,
+  const amenities =
+    await this.prisma.amenity.findMany({
+      where: {
+        id: {
+          in: amenityIds,
+        },
       },
-    },
-    select: {
-      id: true,
-    },
-  });
 
-  if (amenities.length !== amenityIds.length) {
+      select: {
+        id: true,
+      },
+    });
+
+  if (
+    amenities.length !==
+    amenityIds.length
+  ) {
     throw new BadRequestException(
       'One or more amenities are invalid',
     );
   }
 
-  await this.prisma.$transaction(async (tx) => {
-    await tx.propertyAmenity.deleteMany({
-      where: {
-        propertyId,
-      },
-    });
-
-    if (amenityIds.length > 0) {
-      await tx.propertyAmenity.createMany({
-        data: amenityIds.map((amenityId) => ({
+  await this.prisma.$transaction(
+    async (tx) => {
+      await tx.propertyAmenity.deleteMany({
+        where: {
           propertyId,
-          amenityId,
-        })),
+        },
       });
-    }
-  });
 
-  return this.findOneForHost(propertyId, hostId);
+      if (amenityIds.length > 0) {
+        await tx.propertyAmenity.createMany({
+          data: amenityIds.map(
+            (amenityId) => ({
+              propertyId,
+              amenityId,
+            }),
+          ),
+        });
+      }
+    },
+  );
+
+  return this.findOneForHost(
+    propertyId,
+    hostId,
+  );
 }
   async submitForApproval(id: string, hostId: string) {
   const property = await this.findOneForHost(id, hostId);

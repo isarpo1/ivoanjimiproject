@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -42,4 +43,29 @@ export class HostBookingsController {
       payload.sub,
     );
   }
+  @Patch(':id/accept')
+accept(
+  @Req() request: Request,
+  @Param('id') id: string,
+) {
+  const payload = (request as any).user;
+
+  return this.bookingsService.acceptByHost(
+    id,
+    payload.sub,
+  );
+}
+
+@Patch(':id/decline')
+decline(
+  @Req() request: Request,
+  @Param('id') id: string,
+) {
+  const payload = (request as any).user;
+
+  return this.bookingsService.declineByHost(
+    id,
+    payload.sub,
+  );
+}
 }

@@ -75,6 +75,7 @@ export class BookingsService {
           status: {
             in: [
               'PENDING',
+              'AWAITING_HOST',
               'CONFIRMED',
             ],
           },
@@ -181,7 +182,153 @@ export class BookingsService {
     },
   });
 }
+async acceptByHost(
+  bookingId: string,
+  hostId: string,
+) {
+  const booking = await this.prisma.booking.findFirst({
+    where: {
+      id: bookingId,
 
+      property: {
+        hostId,
+      },
+    },
+
+    include: {
+      payments: true,
+      hostEarning: true,
+    },
+  });
+
+  if (!booking) {
+    throw new NotFoundException(
+      'Booking not found',
+    );
+  }
+
+  if (booking.status !== 'AWAITING_HOST') {
+    throw new BadRequestException(
+      'Only bookings awaiting host approval can be accepted',
+    );
+  }
+
+  const successfulPayment =
+    booking.payments.find(
+      (payment) =>
+        payment.status === 'SUCCESSFUL',
+    );
+
+  if (!successfulPayment) {
+    throw new BadRequestException(
+      'Booking does not have a successful payment',
+    );
+  }
+
+  return this.prisma.booking.update({
+    where: {
+      id: booking.id,
+    },
+
+    data: {
+      status: 'CONFIRMED',
+    },
+
+    include: {
+      property: true,
+      payments: true,
+      hostEarning: true,
+    },
+  });
+}
+
+async declineByHost(
+  bookingId: string,
+  hostId: string,
+) {
+  const booking = await this.prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+
+      property: {
+        hostId,
+      },
+    },
+
+    include: {
+      payments: true,
+      hostEarning: true,
+    },
+  });
+
+  if (!booking) {
+    throw new NotFoundException(
+      'Booking not found',
+    );
+  }
+
+  if (booking.status !== 'AWAITING_HOST') {
+    throw new BadRequestException(
+      'Only bookings awaiting host approval can be declined',
+    );
+  }
+
+  return this.prisma.$transaction(
+    async (tx) => {
+      const updatedBooking =
+        await tx.booking.update({
+          where: {
+            id: booking.id,
+          },
+
+          data: {
+            status: 'DECLINED',
+          },
+        });
+
+      await tx.payment.updateMany({
+        where: {
+          bookingId: booking.id,
+          status: 'SUCCESSFUL',
+        },
+
+        data: {
+          status: 'REFUNDED',
+        },
+      });
+
+      await tx.hostEarning.updateMany({
+        where: {
+          bookingId: booking.id,
+        },
+
+        data: {
+          status: 'CANCELLED',
+        },
+      });
+
+      const payments =
+        await tx.payment.findMany({
+          where: {
+            bookingId: booking.id,
+          },
+        });
+
+      const hostEarning =
+        await tx.hostEarning.findUnique({
+          where: {
+            bookingId: booking.id,
+          },
+        });
+
+      return {
+        booking: updatedBooking,
+        payments,
+        hostEarning,
+      };
+    },
+  );
+}
 async findOneForHost(
   id: string,
   hostId: string,
