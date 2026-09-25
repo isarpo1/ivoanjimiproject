@@ -132,6 +132,8 @@ model User {
   guestConversations Conversation[] @relation("GuestConversations")
   hostConversations  Conversation[] @relation("HostConversations")
 
+  savedStays SavedStay[]
+
   @@map("users")
 }
 
@@ -168,6 +170,7 @@ model Property {
   bookings      Booking[]
   reviews       Review[]
   conversations Conversation[]
+  savedStays    SavedStay[]
 
   @@index([hostId])
   @@index([city])
@@ -292,6 +295,22 @@ model Review {
   @@index([propertyId])
   @@index([userId])
   @@map("reviews")
+}
+
+model SavedStay {
+  id         String @id @default(uuid()) @db.Uuid
+  userId     String @db.Uuid
+  propertyId String @db.Uuid
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, propertyId])
+  @@index([userId])
+  @@index([propertyId])
+  @@map("saved_stays")
 }
 
 model Conversation {

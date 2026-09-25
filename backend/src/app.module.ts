@@ -14,6 +14,7 @@ import { PropertiesModule } from './properties/properties.module';
 import { PaymentsModule } from './payments/payments.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { FavoritesModule } from './favorites/favorites.module';
 
 
 
@@ -32,6 +33,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     PaymentsModule,
     MessagingModule,
     ReviewsModule,
+    FavoritesModule,
   ],
 
   controllers: [

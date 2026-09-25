@@ -19,6 +19,11 @@ async function bootstrap() {
     }),
   );
 
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN?.split(',') ?? true,
+    credentials: true,
+  });
+
   app.useStaticAssets(
     join(process.cwd(), 'uploads'),
     {

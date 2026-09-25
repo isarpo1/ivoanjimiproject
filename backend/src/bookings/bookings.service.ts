@@ -53,6 +53,15 @@ export class BookingsService {
       );
     }
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (checkIn < today) {
+      throw new BadRequestException(
+        'Check-in cannot be in the past',
+      );
+    }
+
     const millisecondsPerDay =
       1000 * 60 * 60 * 24;
 
@@ -457,6 +466,7 @@ async findOneForHost(
         },
 
         payments: true,
+        review: true,
       },
     });
 
